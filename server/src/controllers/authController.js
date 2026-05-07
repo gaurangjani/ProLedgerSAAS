@@ -75,3 +75,84 @@ exports.switchOrg = async (req, res, next) => {
     res.json({ success: true, data: { org } });
   } catch (err) { next(err); }
 };
+
+exports.acceptInvite = async (req, res, next) => {
+  try {
+    const { token, name, password } = req.body;
+    if (!token) return res.status(400).json({ success: false, message: 'Token is required' });
+
+    const Invite = require('../models/Invite');
+    const invite = await Invite.findOne({ token });
+    if (!invite) return res.status(404).json({ success: false, message: 'Invalid or expired invite' });
+    if (invite.isExpired()) return res.status(400).json({ success: false, message: 'Invite has expired' });
+    if (invite.acceptedAt) return res.status(400).json({ success: false, message: 'Invite has already been used' });
+
+    let user = await User.findOne({ email: invite.email });
+    if (!user) {
+      if (!name || !password) return res.status(400).json({ success: false, message: 'name and password are required for new accounts' });
+      if (password.length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+      user = await User.create({ name, email: invite.email, password });
+    }
+
+    const existing = await Membership.findOne({ user: user._id, organization: invite.organization });
+    if (!existing) {
+      await Membership.create({ user: user._id, organization: invite.organization, role: invite.role, acceptedAt: new Date() });
+    }
+
+    invite.acceptedAt = new Date();
+    await invite.save();
+
+    user.activeOrg = invite.organization;
+    await user.save();
+
+    req.login(user, (err) => {
+      if (err) return next(err);
+      res.json({ success: true, message: 'Invite accepted. You are now logged in.' });
+    });
+  } catch (err) { next(err); }
+};
+
+const crypto = require('crypto');
+
+// In-memory store for reset tokens (use Redis/DB in production)
+const resetTokens = new Map();
+
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    // Always return 200 to prevent email enumeration
+    if (!user) return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    resetTokens.set(token, { userId: user._id.toString(), expiresAt: Date.now() + 3600000 });
+
+    const resetUrl = `${process.env.APP_URL || 'http://localhost:8080'}/reset-password?token=${token}`;
+    // In production: send email here
+    console.log(`Password reset link for ${email}: ${resetUrl}`);
+
+    res.json({ success: true, message: 'If that email exists, a reset link has been sent.', _devResetUrl: process.env.NODE_ENV !== 'production' ? resetUrl : undefined });
+  } catch (err) { next(err); }
+};
+
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ success: false, message: 'Token and password are required' });
+    if (password.length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+
+    const record = resetTokens.get(token);
+    if (!record || Date.now() > record.expiresAt) return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
+
+    const user = await User.findById(record.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    user.password = password;
+    await user.save();
+    resetTokens.delete(token);
+
+    res.json({ success: true, message: 'Password reset successfully. You can now log in.' });
+  } catch (err) { next(err); }
+};

@@ -208,8 +208,29 @@
                   ))}
                 </div>
                 <button className="btn-primary" style={{background:'white',color:'#3498db',fontSize:16,padding:'12px 32px'}}
-                  onClick={() => alert('Stripe Checkout integration — configure STRIPE_PRICE_ID in env')}>
+                  onClick={async () => {
+                    try {
+                      const r = await window.API.billing.checkout({ plan: 'pro' });
+                      if (r.data?.url) window.location.href = r.data.url;
+                    } catch (e) { setError(e.message); }
+                  }}>
                   Upgrade to Pro — £29/month
+                </button>
+              </div>
+            )}
+
+            {plan.plan !== 'free' && (
+              <div style={{background:'white',borderRadius:12,padding:24,boxShadow:'0 2px 8px rgba(0,0,0,.07)',textAlign:'center'}}>
+                <h3 style={{marginBottom:8,fontSize:18}}>Manage Subscription</h3>
+                <p style={{marginBottom:16,color:'#666'}}>Update payment method, view invoices, or cancel your subscription.</p>
+                <button className="btn-primary"
+                  onClick={async () => {
+                    try {
+                      const r = await window.API.billing.portal();
+                      if (r.data?.url) window.location.href = r.data.url;
+                    } catch (e) { setError(e.message); }
+                  }}>
+                  Open Billing Portal
                 </button>
               </div>
             )}

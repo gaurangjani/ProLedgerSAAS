@@ -8,10 +8,12 @@ require('dotenv').config();
 
 const connectDB  = require('./config/database');
 const passport   = require('./config/passport');
+const { authLimiter, apiLimiter } = require('./middleware/rateLimit');
 
 const authRoutes       = require('./routes/auth');
 const orgRoutes        = require('./routes/orgs');
 const accountingRoutes = require('./routes/accounting');
+const billingRoutes    = require('./routes/billing');
 
 const app = express();
 connectDB();
@@ -28,6 +30,9 @@ app.use(cors({
   },
   credentials: true
 }));
+
+// Stripe webhooks need raw body — must come before express.json()
+app.use('/api/v1/billing/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -55,9 +60,10 @@ const API = '/api/v1';
 app.get('/', (req, res) => res.json({ success: true, message: 'LedgerPro SaaS API v1' }));
 app.get(`${API}/health`, (req, res) => res.json({ success: true, ts: new Date().toISOString() }));
 
-app.use(`${API}/auth`,    authRoutes);
-app.use(`${API}/orgs`,    orgRoutes);
-app.use(`${API}`,         accountingRoutes);
+app.use(`${API}/auth`,    authLimiter, authRoutes);
+app.use(`${API}/orgs`,    apiLimiter,  orgRoutes);
+app.use(`${API}/billing`, apiLimiter,  billingRoutes);
+app.use(`${API}`,         apiLimiter,  accountingRoutes);
 
 app.use((req, res) => res.status(404).json({ success: false, message: 'Not found' }));
 app.use((err, req, res, next) => {

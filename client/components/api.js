@@ -149,6 +149,12 @@
       addCost:   (id,d) => request('POST', `/projects/${id}/costs`, d),
       getTime:    (id)  => request('GET', `/projects/${id}/time-entries`),
       addTime:   (id,d) => request('POST', `/projects/${id}/time-entries`, d)
-    }
+    },
+
+    billing: {
+      getStatus:  ()  => request('GET',  '/billing/status'),
+      checkout:   (d) => request('POST', '/billing/checkout', d),
+      portal:     ()  => request('POST', '/billing/portal')
+    },
   };
 })();
