@@ -4,10 +4,11 @@ import API from '../api';
 import { Tabs, StatusBadge, ErrorBanner, LoadingSpinner, DataTable, Modal, ConfirmDialog, FormField, formatCurrency, formatDate } from './ui';
 
 const TABS = [
-  { id: 'customers', label: 'Customers'     },
-  { id: 'invoices',  label: 'Invoices'      },
-  { id: 'payments',  label: 'Payments'      },
-  { id: 'aging',     label: 'Aging Report'  }
+  { id: 'customers',  label: 'Customers'         },
+  { id: 'invoices',   label: 'Invoices'           },
+  { id: 'payments',   label: 'Payments'           },
+  { id: 'aging',      label: 'Aging Report'       },
+  { id: 'recurring',  label: 'Recurring Invoices' }
 ];
 
 const PAYMENT_TERMS = ['net-7','net-15','net-30','net-60','net-90','due-on-receipt'];
@@ -23,6 +24,8 @@ export default function ARModule({ navigate }) {
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [aging, setAging] = useState(null);
+  const [recurring, setRecurring] = useState([]);
+  const [recurringForm, setRecurringForm] = useState({ templateName:'', customer:'', frequency:'monthly', nextDate: new Date().toISOString().split('T')[0], paymentTerms:30, notes:'', lines:[{description:'',quantity:1,unitPrice:0,amount:0,taxRate:0}] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -34,10 +37,11 @@ export default function ARModule({ navigate }) {
   const [formError, setFormError] = useState(null);
 
   const loaders = {
-    customers: async () => { const r = await API.ar.getCustomers(); setCustomers(r.data || []); },
-    invoices:  async () => { const r = await API.ar.getInvoices();  setInvoices(r.data || []); },
-    payments:  async () => { const r = await API.ar.getPayments();  setPayments(r.data || []); },
-    aging:     async () => { const r = await API.ar.getAgingReport(); setAging(r.data || r); }
+    customers:  async () => { const r = await API.ar.getCustomers();    setCustomers(r.data || []); },
+    invoices:   async () => { const r = await API.ar.getInvoices();     setInvoices(r.data || []); },
+    payments:   async () => { const r = await API.ar.getPayments();     setPayments(r.data || []); },
+    aging:      async () => { const r = await API.ar.getAgingReport();  setAging(r.data || r); },
+    recurring:  async () => { const r = await API.ar.getRecurring();    setRecurring(r.data || []); }
   };
 
   const load = async () => {
@@ -94,11 +98,30 @@ export default function ARModule({ navigate }) {
     } catch (err) { setFormError(err.message); }
   };
 
+  const saveRecurring = async (e) => {
+    e.preventDefault(); setFormError(null);
+    try {
+      const lines = recurringForm.lines.map(l => ({ ...l, amount: (parseFloat(l.quantity)||1)*(parseFloat(l.unitPrice)||0) }));
+      await API.ar.createRecurring({ ...recurringForm, lines });
+      closeModal(); load();
+    } catch (err) { setFormError(err.message); }
+  };
+
+  const generateDue = async () => {
+    setError(null);
+    try {
+      const r = await API.ar.generateDue();
+      if (r.generated > 0) { alert(`Generated ${r.generated} invoice(s).`); load(); }
+      else alert('No invoices due today.');
+    } catch (err) { setError(err.message); }
+  };
+
   const openAdd = () => {
     setEditItem(null); setFormError(null);
     if (activeTab === 'customers') { setFormData(emptyCustomer()); }
     else if (activeTab === 'invoices') { setInvoiceForm(emptyInvoice()); }
     else if (activeTab === 'payments') { setPaymentForm(emptyPayment()); }
+    else if (activeTab === 'recurring') { setRecurringForm({ templateName:'', customer:'', frequency:'monthly', nextDate: new Date().toISOString().split('T')[0], paymentTerms:30, notes:'', lines:[{description:'',quantity:1,unitPrice:0,amount:0,taxRate:0}] }); }
     setShowModal(true);
   };
   const openEdit = (item) => { setEditItem(item); setFormData({...item}); setFormError(null); setShowModal(true); };
@@ -148,7 +171,15 @@ export default function ARModule({ navigate }) {
             { key:'dueDate', label:'Due', render: v => formatDate(v) },
             { key:'total', label:'Total', render: v => formatCurrency(v) },
             { key:'amountDue', label:'Outstanding', render: v => formatCurrency(v) },
-            { key:'status', label:'Status', render: v => <StatusBadge status={v} /> }
+            { key:'status', label:'Status', render: v => <StatusBadge status={v} /> },
+            { key:'_id', label:'Actions', render: (id, row) => (
+              <div style={{display:'flex',gap:6}}>
+                <button className="btn-sm btn-secondary" onClick={() => { openEdit(row); }}>Edit</button>
+                <button className="btn-sm" style={{background:'#27ae60',color:'white',border:'none',borderRadius:4,padding:'3px 10px',cursor:'pointer',fontSize:12}}
+                  onClick={() => API.ar.downloadPdf(id)} title="Download PDF">PDF</button>
+                <button className="btn-sm btn-danger" onClick={() => setConfirmTarget(row)}>Delete</button>
+              </div>
+            )}
           ]}
           data={invoices}
         />
@@ -301,6 +332,80 @@ export default function ARModule({ navigate }) {
             </FormField>
           </div>
           <FormField label="Reference"><input className="form-input" value={paymentForm.reference||''} onChange={e=>setPaymentForm(f=>({...f,reference:e.target.value}))} /></FormField>
+        </Modal>
+      )}
+
+      {/* Recurring Invoices Tab */}
+      {activeTab === 'recurring' && (<>
+        <div className="module-toolbar">
+          <h3>Recurring Invoices ({recurring.length})</h3>
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn-secondary" onClick={generateDue}>Generate Due</button>
+            <button className="btn-primary" onClick={openAdd}>+ New Template</button>
+          </div>
+        </div>
+        {error && <ErrorBanner message={error} onRetry={load} />}
+        <DataTable loading={loading} emptyText="No recurring invoice templates yet."
+          columns={[
+            {key:'templateName',label:'Template'},
+            {key:'customerName',label:'Customer'},
+            {key:'frequency',label:'Frequency'},
+            {key:'nextDate',label:'Next Date',render:v=>formatDate(v)},
+            {key:'endDate',label:'End Date',render:v=>v?formatDate(v):'—'},
+            {key:'isActive',label:'Status',render:v=><StatusBadge status={v?'active':'inactive'}/>}
+          ]}
+          data={recurring}
+          actions={row=>(<>
+            <button className="btn-danger btn-sm" onClick={async()=>{if(!confirm('Delete this recurring template?'))return;try{await API.ar.deleteRecurring(row._id);load();}catch(e){setError(e.message);}}}>Delete</button>
+          </>)}
+        />
+      </>)}
+
+      {/* Recurring Modal */}
+      {showModal && activeTab === 'recurring' && (
+        <Modal title="New Recurring Invoice Template" onClose={closeModal} footer={<>
+          <button className="btn-secondary" onClick={closeModal}>Cancel</button>
+          <button className="btn-primary" onClick={saveRecurring}>Save Template</button>
+        </>}>
+          {formError && <ErrorBanner message={formError}/>}
+          <div className="form-row">
+            <FormField label="Template Name *"><input className="form-input" value={recurringForm.templateName||''} onChange={e=>setRecurringForm(f=>({...f,templateName:e.target.value}))} required /></FormField>
+            <FormField label="Customer">
+              <select className="form-select" value={recurringForm.customer||''} onChange={e=>{const c=customers.find(x=>x._id===e.target.value);setRecurringForm(f=>({...f,customer:e.target.value,customerName:c?.customerName||''}));}}>
+                <option value="">Select customer...</option>
+                {customers.map(c=><option key={c._id} value={c._id}>{c.customerName}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <div className="form-row">
+            <FormField label="Frequency">
+              <select className="form-select" value={recurringForm.frequency} onChange={e=>setRecurringForm(f=>({...f,frequency:e.target.value}))}>
+                {['weekly','monthly','quarterly','annually'].map(v=><option key={v} value={v}>{v}</option>)}
+              </select>
+            </FormField>
+            <FormField label="First Invoice Date *"><input className="form-input" type="date" value={recurringForm.nextDate||''} onChange={e=>setRecurringForm(f=>({...f,nextDate:e.target.value}))} required /></FormField>
+          </div>
+          <div className="form-row">
+            <FormField label="End Date (optional)"><input className="form-input" type="date" value={recurringForm.endDate||''} onChange={e=>setRecurringForm(f=>({...f,endDate:e.target.value}))} /></FormField>
+            <FormField label="Payment Terms (days)"><input className="form-input" type="number" min="0" value={recurringForm.paymentTerms||30} onChange={e=>setRecurringForm(f=>({...f,paymentTerms:parseInt(e.target.value)||30}))} /></FormField>
+          </div>
+          <div style={{marginBottom:8,fontWeight:600,fontSize:13,color:'#555'}}>Line Items</div>
+          <table className="line-items-table">
+            <thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Tax %</th><th></th></tr></thead>
+            <tbody>
+              {recurringForm.lines.map((l,idx)=>(
+                <tr key={idx}>
+                  <td><input className="form-input" style={{fontSize:13}} value={l.description||''} onChange={e=>{const lines=[...recurringForm.lines];lines[idx]={...lines[idx],description:e.target.value};setRecurringForm(f=>({...f,lines}));}}/></td>
+                  <td><input className="form-input" style={{fontSize:13,width:60}} type="number" min="1" value={l.quantity||1} onChange={e=>{const lines=[...recurringForm.lines];lines[idx]={...lines[idx],quantity:e.target.value};setRecurringForm(f=>({...f,lines}));}}/></td>
+                  <td><input className="form-input" style={{fontSize:13,width:90}} type="number" min="0" step="0.01" value={l.unitPrice||0} onChange={e=>{const lines=[...recurringForm.lines];lines[idx]={...lines[idx],unitPrice:e.target.value};setRecurringForm(f=>({...f,lines}));}}/></td>
+                  <td><input className="form-input" style={{fontSize:13,width:60}} type="number" min="0" max="100" value={l.taxRate||0} onChange={e=>{const lines=[...recurringForm.lines];lines[idx]={...lines[idx],taxRate:e.target.value};setRecurringForm(f=>({...f,lines}));}}/></td>
+                  <td><button className="btn-danger btn-sm" onClick={()=>setRecurringForm(f=>({...f,lines:f.lines.filter((_,i)=>i!==idx)}))} disabled={recurringForm.lines.length===1}>×</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button className="btn-secondary btn-sm" style={{marginTop:8}} onClick={()=>setRecurringForm(f=>({...f,lines:[...f.lines,{description:'',quantity:1,unitPrice:0,amount:0,taxRate:0}]}))}>+ Add Line</button>
+          <FormField label="Notes" style={{marginTop:12}}><input className="form-input" value={recurringForm.notes||''} onChange={e=>setRecurringForm(f=>({...f,notes:e.target.value}))} /></FormField>
         </Modal>
       )}
 

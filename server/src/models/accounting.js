@@ -54,6 +54,22 @@ const invoiceSchema = new Schema({
 }, { timestamps: true });
 invoiceSchema.index({ org: 1, invoiceNumber: 1 }, { unique: true });
 
+// ── Recurring Invoice ─────────────────────────────────
+const recurringInvoiceSchema = new Schema({
+  org, templateName: { type: String, required: true },
+  customer: { type: Schema.Types.ObjectId, ref: 'Customer' },
+  customerName: String,
+  frequency: { type: String, enum: ['weekly','monthly','quarterly','annually'], default: 'monthly' },
+  nextDate: { type: Date, required: true },
+  endDate: Date,
+  lines: [invoiceLineSchema],
+  paymentTerms: { type: Number, default: 30 },
+  notes: String,
+  isActive: { type: Boolean, default: true },
+  lastGenerated: Date,
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
+
 // ── Payment (AR) ─────────────────────────────────────
 const arPaymentSchema = new Schema({
   org, paymentRef: String, customer: { type: Schema.Types.ObjectId, ref: 'Customer' },
@@ -152,9 +168,16 @@ const expenseCategorySchema = new Schema({
 
 // ── Expense Claim ─────────────────────────────────────
 const expenseItemSchema = new Schema({
-  category: { type: Schema.Types.ObjectId, ref: 'ExpenseCategory' },
+  category:    { type: Schema.Types.ObjectId, ref: 'ExpenseCategory' },
   date: Date, description: String, amount: Number,
-  currency: { type: String, default: 'GBP' }, hasReceipt: { type: Boolean, default: false }
+  currency:    { type: String, default: 'GBP' },
+  hasReceipt:  { type: Boolean, default: false },
+  receipt: {
+    data:        Buffer,
+    contentType: String,
+    filename:    String,
+    size:        Number
+  }
 });
 const expenseClaimSchema = new Schema({
   org, claimNumber: String, claimDate: Date,
@@ -203,7 +226,8 @@ timeEntrySchema.pre('save', function(next) {
 });
 
 module.exports = {
-  Account:        mongoose.model('Account',        accountSchema),
+  Account:          mongoose.model('Account',          accountSchema),
+  RecurringInvoice: mongoose.model('RecurringInvoice', recurringInvoiceSchema),
   JournalEntry:   mongoose.model('JournalEntry',   journalEntrySchema),
   Customer:       mongoose.model('Customer',        customerSchema),
   Invoice:        mongoose.model('Invoice',         invoiceSchema),

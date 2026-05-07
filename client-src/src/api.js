@@ -86,7 +86,12 @@ const API = {
     emailInvoice:   (id, d) => request('POST', `/ar/invoices/${id}/email`, d),
     getPayments:    (p)     => request('GET', '/ar/payments' + q(p)),
     createPayment:  (d)     => request('POST', '/ar/payments', d),
-    getAgingReport: ()      => request('GET', '/ar/reports/aging')
+    getAgingReport: ()      => request('GET', '/ar/reports/aging'),
+    getRecurring:   ()      => request('GET', '/ar/recurring'),
+    createRecurring: (d)    => request('POST', '/ar/recurring', d),
+    updateRecurring: (id,d) => request('PUT', `/ar/recurring/${id}`, d),
+    deleteRecurring: (id)   => request('DELETE', `/ar/recurring/${id}`),
+    generateDue:    ()      => request('POST', '/ar/recurring/generate')
   },
 
   ap: {
@@ -144,7 +149,20 @@ const API = {
     submitClaim:     (id)   => request('POST', `/expenses/claims/${id}/submit`),
     approveClaim:    (id)   => request('POST', `/expenses/claims/${id}/approve`),
     rejectClaim:     (id,d) => request('POST', `/expenses/claims/${id}/reject`, d),
-    markReimbursed:  (id)   => request('POST', `/expenses/claims/${id}/reimburse`)
+    markReimbursed:  (id)   => request('POST', `/expenses/claims/${id}/reimburse`),
+    uploadReceipt:   (claimId, itemIndex, file) => {
+      const fd = new FormData(); fd.append('receipt', file);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30000);
+      const headers = {};
+      if (API?.currentOrg?._id) headers['x-org-id'] = API.currentOrg._id;
+      return fetch(BASE_URL + `/expenses/claims/${claimId}/items/${itemIndex}/receipt`, {
+        method: 'POST', credentials: 'include', signal: ctrl.signal, headers, body: fd
+      }).then(r => r.json()).finally(() => clearTimeout(timer));
+    },
+    downloadReceipt: (claimId, itemIndex) => {
+      window.open(BASE_URL + `/expenses/claims/${claimId}/items/${itemIndex}/receipt`, '_blank');
+    }
   },
 
   projects: {
@@ -163,6 +181,10 @@ const API = {
     getStatus:  ()  => request('GET',  '/billing/status'),
     checkout:   (d) => request('POST', '/billing/checkout', d),
     portal:     ()  => request('POST', '/billing/portal')
+  },
+
+  audit: {
+    list: (p) => request('GET', '/audit' + (p ? '?' + new URLSearchParams(p).toString() : ''))
   },
 };
 

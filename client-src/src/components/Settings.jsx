@@ -1,4 +1,4 @@
-// SaaS Settings — Org Profile, Team Members, Invites, Plan & Billing
+// SaaS Settings — Org Profile, Team Members, Invites, Plan & Billing, Audit Log
 import { useState, useEffect } from 'react';
 import API from '../api';
 import { Tabs, StatusBadge, ErrorBanner } from './ui';
@@ -18,10 +18,20 @@ export default function SettingsModule({ navigate, org: orgProp }) {
   const [inviteUrl, setInviteUrl]     = useState('');
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState('');
+  const [auditLogs, setAuditLogs] = useState([]);
 
   useEffect(() => {
     loadAll();
   }, []);
+
+  useEffect(() => {
+    if (tab === 'audit') loadAudit();
+  }, [tab]);
+
+  const loadAudit = async () => {
+    try { const r = await API.audit.list(); setAuditLogs(r.data || []); }
+    catch (e) { setError(e.message); }
+  };
 
   const loadAll = async () => {
     try {
@@ -77,7 +87,8 @@ export default function SettingsModule({ navigate, org: orgProp }) {
     { id:'org',     label:'Organisation' },
     { id:'members', label:'Team Members' },
     { id:'invites', label:'Invites'      },
-    { id:'plan',    label:'Plan & Usage' }
+    { id:'plan',    label:'Plan & Usage' },
+    { id:'audit',   label:'Audit Log'    }
   ];
 
   return (
@@ -270,6 +281,30 @@ export default function SettingsModule({ navigate, org: orgProp }) {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Audit Log ── */}
+      {tab === 'audit' && (
+        <div className="data-table-container">
+          <div style={{padding:'12px 16px',borderBottom:'1px solid #ecf0f1',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span style={{fontSize:13,color:'#7f8c8d'}}>Showing last {auditLogs.length} events (admin+ only)</span>
+            <button className="btn-sm btn-secondary" onClick={loadAudit}>Refresh</button>
+          </div>
+          <table className="data-table">
+            <thead><tr><th>When</th><th>User</th><th>Action</th><th>Resource</th></tr></thead>
+            <tbody>
+              {auditLogs.length === 0 && <tr><td colSpan={4} className="empty-state-cell">No audit events yet</td></tr>}
+              {auditLogs.map(log => (
+                <tr key={log._id}>
+                  <td style={{fontSize:12,color:'#7f8c8d',whiteSpace:'nowrap'}}>{new Date(log.createdAt).toLocaleString('en-GB')}</td>
+                  <td><strong>{log.user?.name || '—'}</strong><br/><span style={{fontSize:11,color:'#aaa'}}>{log.user?.email}</span></td>
+                  <td><StatusBadge status={log.action} /></td>
+                  <td>{log.resource}{log.resourceId ? <span style={{fontSize:11,color:'#aaa',marginLeft:4}}>#{String(log.resourceId).slice(-6)}</span> : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

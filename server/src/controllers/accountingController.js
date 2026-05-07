@@ -3,7 +3,8 @@ const {
   Account, JournalEntry, Customer, Invoice, ARPayment,
   Vendor, Bill, PurchaseOrder, APPayment, FixedAsset,
   TaxConfig, TaxReturn, Department, Employee,
-  ExpenseCategory, ExpenseClaim, Project, ProjectCost, TimeEntry
+  ExpenseCategory, ExpenseClaim, Project, ProjectCost, TimeEntry,
+  RecurringInvoice
 } = require('../models/accounting');
 
 // ── Generic helpers ───────────────────────────────────
@@ -217,6 +218,59 @@ exports.disposeAsset = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+exports.calculateDepreciation = async (req, res, next) => {
+  try {
+    const asset = await FixedAsset.findOne({ _id: req.params.id, org: req.orgId });
+    if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+
+    const cost      = asset.acquisitionCost || 0;
+    const residual  = asset.residualValue   || 0;
+    const life      = asset.usefulLifeYears || (asset.usefulLife?.value) || 1;
+    const method    = asset.depreciationMethod || 'straight-line';
+    const startDate = asset.acquisitionDate ? new Date(asset.acquisitionDate) : new Date();
+    const today     = new Date();
+    const yearsElapsed = Math.max(0, (today - startDate) / (365.25 * 24 * 3600 * 1000));
+
+    let schedule = [];
+    let bookValue = cost;
+    let runningAccum = 0;
+
+    for (let yr = 1; yr <= life; yr++) {
+      const openingBV = bookValue;
+      let charge = 0;
+      if (method === 'straight-line') {
+        charge = (cost - residual) / life;
+      } else if (method === 'declining-balance') {
+        const rate = 2 / life;
+        charge = bookValue * rate;
+        if (bookValue - charge < residual) charge = Math.max(0, bookValue - residual);
+      }
+      bookValue = Math.max(residual, bookValue - charge);
+      runningAccum += charge;
+      schedule.push({
+        year: yr,
+        openingBookValue: Math.round(openingBV * 100) / 100,
+        depreciation: Math.round(charge * 100) / 100,
+        closingBookValue: Math.round(bookValue * 100) / 100,
+        accumulatedDepreciation: Math.round(runningAccum * 100) / 100
+      });
+      if (bookValue <= residual) break;
+    }
+
+    const accumulatedToDate = schedule
+      .filter((_, i) => i < Math.floor(yearsElapsed))
+      .reduce((s, r) => s + r.depreciation, 0);
+
+    const updatedAsset = await FixedAsset.findOneAndUpdate(
+      { _id: req.params.id, org: req.orgId },
+      { accumulatedDepreciation: Math.round(accumulatedToDate * 100) / 100, netBookValue: Math.round((cost - accumulatedToDate) * 100) / 100 },
+      { new: true }
+    );
+
+    res.json({ success: true, data: { asset: updatedAsset, schedule, accumulatedToDate: Math.round(accumulatedToDate * 100) / 100 } });
+  } catch (err) { next(err); }
+};
+
 // ── Tax ───────────────────────────────────────────────
 exports.listTaxConfigs   = list(TaxConfig);
 exports.createTaxConfig  = create(TaxConfig);
@@ -268,6 +322,44 @@ exports.submitClaim    = claimAction('submitted');
 exports.approveClaim   = claimAction('approved');
 exports.rejectClaim    = claimAction('rejected');
 exports.reimbursClaim  = claimAction('reimbursed');
+
+exports.uploadReceipt = async (req, res, next) => {
+  try {
+    const { claimId, itemIndex } = req.params;
+    const idx = parseInt(itemIndex, 10);
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    if (req.file.size > 5 * 1024 * 1024) return res.status(400).json({ success: false, message: 'File exceeds 5 MB limit' });
+
+    const claim = await ExpenseClaim.findOne({ _id: claimId, org: req.orgId });
+    if (!claim) return res.status(404).json({ success: false, message: 'Claim not found' });
+    if (idx < 0 || idx >= claim.items.length) return res.status(400).json({ success: false, message: 'Invalid item index' });
+
+    claim.items[idx].hasReceipt = true;
+    claim.items[idx].receipt = {
+      data: req.file.buffer,
+      contentType: req.file.mimetype,
+      filename: req.file.originalname,
+      size: req.file.size
+    };
+    await claim.save();
+    res.json({ success: true, message: 'Receipt uploaded', filename: req.file.originalname });
+  } catch (err) { next(err); }
+};
+
+exports.downloadReceipt = async (req, res, next) => {
+  try {
+    const { claimId, itemIndex } = req.params;
+    const idx = parseInt(itemIndex, 10);
+    const claim = await ExpenseClaim.findOne({ _id: claimId, org: req.orgId });
+    if (!claim) return res.status(404).json({ success: false, message: 'Claim not found' });
+    const item = claim.items[idx];
+    if (!item?.receipt?.data) return res.status(404).json({ success: false, message: 'No receipt attached' });
+
+    res.set('Content-Type', item.receipt.contentType || 'application/octet-stream');
+    res.set('Content-Disposition', `attachment; filename="${item.receipt.filename || 'receipt'}"`);
+    res.send(item.receipt.data);
+  } catch (err) { next(err); }
+};
 
 // ── Projects ──────────────────────────────────────────
 exports.listProjects  = list(Project);
@@ -326,5 +418,53 @@ exports.addTimeEntry    = async (req, res, next) => {
   try {
     const doc = await TimeEntry.create({ ...req.body, org: req.orgId, project: req.params.id });
     res.status(201).json({ success: true, data: doc });
+  } catch (err) { next(err); }
+};
+
+// ── Recurring Invoices ────────────────────────────────
+exports.listRecurring   = list(RecurringInvoice);
+exports.createRecurring = async (req, res, next) => {
+  try {
+    const doc = await RecurringInvoice.create({ ...req.body, org: req.orgId, createdBy: req.user._id });
+    res.status(201).json({ success: true, data: doc });
+  } catch (err) { next(err); }
+};
+exports.updateRecurring = update(RecurringInvoice);
+exports.deleteRecurring = remove(RecurringInvoice);
+
+exports.generateDueInvoices = async (req, res, next) => {
+  try {
+    const today = new Date(); today.setHours(23, 59, 59, 999);
+    const templates = await RecurringInvoice.find({ org: req.orgId, isActive: true, nextDate: { $lte: today } });
+    const generated = [];
+
+    for (const tmpl of templates) {
+      const count = await Invoice.countDocuments({ org: req.orgId });
+      const invoiceNumber = `INV-${String(count + 1).padStart(5, '0')}`;
+      const invoiceDate   = new Date(tmpl.nextDate);
+      const dueDate       = new Date(invoiceDate); dueDate.setDate(dueDate.getDate() + (tmpl.paymentTerms || 30));
+      const subtotal      = tmpl.lines.reduce((s, l) => s + (l.amount || 0), 0);
+      const taxAmount     = tmpl.lines.reduce((s, l) => s + (l.amount || 0) * ((l.taxRate || 0) / 100), 0);
+      const totalAmount   = subtotal + taxAmount;
+
+      const inv = await Invoice.create({
+        org: req.orgId, invoiceNumber, customer: tmpl.customer, customerName: tmpl.customerName,
+        invoiceDate, dueDate, lines: tmpl.lines, subtotal, taxAmount, totalAmount,
+        amountDue: totalAmount, notes: tmpl.notes, status: 'draft', createdBy: req.user._id
+      });
+      generated.push(inv);
+
+      // Advance nextDate
+      const next = new Date(tmpl.nextDate);
+      if (tmpl.frequency === 'weekly')      next.setDate(next.getDate() + 7);
+      else if (tmpl.frequency === 'monthly')   next.setMonth(next.getMonth() + 1);
+      else if (tmpl.frequency === 'quarterly') next.setMonth(next.getMonth() + 3);
+      else if (tmpl.frequency === 'annually')  next.setFullYear(next.getFullYear() + 1);
+
+      const isExpired = tmpl.endDate && next > new Date(tmpl.endDate);
+      await RecurringInvoice.updateOne({ _id: tmpl._id }, { nextDate: next, lastGenerated: new Date(), isActive: !isExpired });
+    }
+
+    res.json({ success: true, data: generated, generated: generated.length });
   } catch (err) { next(err); }
 };

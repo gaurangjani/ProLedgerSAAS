@@ -1,20 +1,24 @@
 const router   = require('express').Router();
+const multer   = require('multer');
 const c        = require('../controllers/accountingController');
 const validate = require('../middleware/validate');
 const s        = require('../validation/schemas');
+const audit    = require('../middleware/audit');
 const { isAuthenticated, requireOrg, canWrite } = require('../middleware/auth');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 router.use(isAuthenticated, requireOrg);
 
 // ── Finance ───────────────────────────────────────────
-router.get('/finance/accounts',                                        c.listAccounts);
-router.post('/finance/accounts',   canWrite, validate(s.createAccount), c.createAccount);
+router.get('/finance/accounts',                                                                  c.listAccounts);
+router.post('/finance/accounts',   canWrite, validate(s.createAccount), audit('CREATE','Account'), c.createAccount);
 router.put('/finance/accounts/:id', canWrite,                          c.updateAccount);
 router.delete('/finance/accounts/:id', canWrite,                       c.deleteAccount);
 
 router.get('/finance/journal-entries',                                            c.listJournals);
-router.post('/finance/journal-entries', canWrite, validate(s.createJournalEntry), c.createJournal);
-router.put('/finance/journal-entries/:id', canWrite,                              c.postJournal);
+router.post('/finance/journal-entries', canWrite, validate(s.createJournalEntry), audit('CREATE','JournalEntry'), c.createJournal);
+router.put('/finance/journal-entries/:id', canWrite,                                                               c.postJournal);
 
 router.get('/finance/reports/trial-balance',    c.getTrialBalance);
 router.get('/finance/reports/profit-loss',      c.getProfitLoss);
@@ -27,9 +31,9 @@ router.put('/ar/customers/:id', canWrite, c.updateCustomer);
 router.delete('/ar/customers/:id', canWrite, c.deleteCustomer);
 
 router.get('/ar/invoices',                                          c.listInvoices);
-router.post('/ar/invoices',              canWrite, validate(s.createInvoice), c.createInvoice);
-router.put('/ar/invoices/:id',           canWrite,                            c.updateInvoice);
-router.delete('/ar/invoices/:id',        canWrite,                            c.deleteInvoice);
+router.post('/ar/invoices',       canWrite, validate(s.createInvoice), audit('CREATE','Invoice'), c.createInvoice);
+router.put('/ar/invoices/:id',    canWrite,                           audit('UPDATE','Invoice'), c.updateInvoice);
+router.delete('/ar/invoices/:id', canWrite,                           audit('DELETE','Invoice'), c.deleteInvoice);
 router.get('/ar/invoices/:id/pdf',                                            c.downloadInvoicePdf);
 router.post('/ar/invoices/:id/email',    canWrite,                            c.emailInvoice);
 
@@ -59,6 +63,7 @@ router.post('/fixed-assets', canWrite, c.createAsset);
 router.put('/fixed-assets/:id', canWrite, c.updateAsset);
 router.delete('/fixed-assets/:id', canWrite, c.deleteAsset);
 router.post('/fixed-assets/:id/dispose', canWrite, c.disposeAsset);
+router.get('/fixed-assets/:id/depreciation', c.calculateDepreciation);
 
 // ── Tax ───────────────────────────────────────────────
 router.get('/tax/configurations',    c.listTaxConfigs);
@@ -93,6 +98,15 @@ router.post('/expenses/claims/:id/submit',    canWrite, c.submitClaim);
 router.post('/expenses/claims/:id/approve',   canWrite, c.approveClaim);
 router.post('/expenses/claims/:id/reject',    canWrite, c.rejectClaim);
 router.post('/expenses/claims/:id/reimburse', canWrite, c.reimbursClaim);
+router.post('/expenses/claims/:claimId/items/:itemIndex/receipt', canWrite, upload.single('receipt'), c.uploadReceipt);
+router.get('/expenses/claims/:claimId/items/:itemIndex/receipt',  c.downloadReceipt);
+
+// ── Recurring Invoices ────────────────────────────────
+router.get('/ar/recurring',              c.listRecurring);
+router.post('/ar/recurring', canWrite,   c.createRecurring);
+router.put('/ar/recurring/:id', canWrite, c.updateRecurring);
+router.delete('/ar/recurring/:id', canWrite, c.deleteRecurring);
+router.post('/ar/recurring/generate', canWrite, c.generateDueInvoices);
 
 // ── Projects ──────────────────────────────────────────
 router.get('/projects',              c.listProjects);

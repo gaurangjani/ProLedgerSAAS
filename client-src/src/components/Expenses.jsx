@@ -1,5 +1,5 @@
 // LedgerPro Expense Management Module
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import API from '../api';
 import { Tabs, StatusBadge, ErrorBanner, DataTable, Modal, FormField, formatCurrency, formatDate } from './ui';
 
@@ -23,6 +23,9 @@ export default function ExpensesModule({ navigate }) {
   const [formData, setFormData] = useState(emptyCategory());
   const [claimForm, setClaimForm] = useState(emptyClaim());
   const [formError, setFormError] = useState(null);
+  const [receiptModal, setReceiptModal] = useState(null); // { claim, itemIndex }
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const fileInputRef = useRef(null);
 
   const loadCats   = async () => { const r = await API.expenses.getCategories(); setCategories(r.data||[]); };
   const loadClaims = async () => { const r = await API.expenses.getClaims();     setClaims(r.data||[]); };
@@ -62,6 +65,18 @@ export default function ExpensesModule({ navigate }) {
       await API.expenses.createClaim({ ...claimForm, items: claimForm.items.map(i=>({...i,amount:parseFloat(i.amount)||0})) });
       closeModal(); load();
     } catch (err) { setFormError(err.message); }
+  };
+
+  const handleReceiptUpload = async (file) => {
+    if (!file || !receiptModal) return;
+    setUploadingReceipt(true); setError(null);
+    try {
+      const res = await API.expenses.uploadReceipt(receiptModal.claim._id, receiptModal.itemIndex, file);
+      if (!res.success) throw new Error(res.message || 'Upload failed');
+      setReceiptModal(null);
+      load();
+    } catch (err) { setError(err.message); }
+    finally { setUploadingReceipt(false); }
   };
 
   const workflowAction = async (action, claim) => {
@@ -117,6 +132,10 @@ export default function ExpensesModule({ navigate }) {
               {row.status==='submitted' && <button className="btn-secondary btn-sm" onClick={()=>workflowAction('approve',row)}>Approve</button>}
               {row.status==='submitted' && <button className="btn-danger btn-sm" onClick={()=>workflowAction('reject',row)}>Reject</button>}
               {row.status==='approved' && <button className="btn-primary btn-sm" onClick={()=>workflowAction('reimburse',row)}>Reimburse</button>}
+              {(row.items||[]).length > 0 && (
+                <button className="btn-sm" style={{background:'#8e44ad',color:'white',border:'none',borderRadius:4,padding:'3px 8px',cursor:'pointer',fontSize:12}}
+                  onClick={()=>setReceiptModal({ claim: row, itemIndex: 0 })}>Receipts</button>
+              )}
             </div>
           )}
         />
@@ -144,6 +163,34 @@ export default function ExpensesModule({ navigate }) {
             </div>
             <FormField label="Description"><input className="form-input" value={formData.description||''} onChange={e=>setFormData(f=>({...f,description:e.target.value}))} /></FormField>
           </form>
+        </Modal>
+      )}
+
+      {/* Receipt Modal */}
+      {receiptModal && (
+        <Modal title="Expense Receipts" onClose={()=>setReceiptModal(null)} footer={<button className="btn-secondary" onClick={()=>setReceiptModal(null)}>Close</button>}>
+          <div>
+            {(receiptModal.claim.items||[]).map((item, idx) => (
+              <div key={idx} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid #f0f0f0'}}>
+                <div>
+                  <div style={{fontWeight:600,fontSize:13}}>{item.description || `Item ${idx+1}`}</div>
+                  <div style={{fontSize:12,color:'#888'}}>{formatCurrency(item.amount)} — {item.date ? formatDate(item.date) : ''}</div>
+                </div>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  {item.hasReceipt
+                    ? <button className="btn-sm" style={{background:'#27ae60',color:'white',border:'none',borderRadius:4,padding:'3px 10px',cursor:'pointer',fontSize:12}}
+                        onClick={()=>API.expenses.downloadReceipt(receiptModal.claim._id, idx)}>Download</button>
+                    : <span style={{fontSize:12,color:'#aaa'}}>No receipt</span>
+                  }
+                  <label style={{background:'#3498db',color:'white',borderRadius:4,padding:'3px 10px',fontSize:12,cursor:'pointer'}}>
+                    {uploadingReceipt ? 'Uploading…' : 'Upload'}
+                    <input type="file" accept="image/*,application/pdf" style={{display:'none'}} disabled={uploadingReceipt}
+                      onChange={e => { if (e.target.files[0]) { setReceiptModal(m=>({...m,itemIndex:idx})); handleReceiptUpload(e.target.files[0]); } }} />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
         </Modal>
       )}
 
