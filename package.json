@@ -1,0 +1,11 @@
+{
+  "name": "ledgerpro-saas",
+  "version": "1.0.0",
+  "description": "LedgerPro SaaS — multi-tenant accounting software",
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "npx http-server client -p 8080 -c-1",
+    "install:all": "npm install && cd server && npm install",
+    "start": "cd server && npm start"
+  }
+}

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="LedgerPro SaaS — Professional accounting software for teams">
+  <title>LedgerPro — Accounting Software</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* SaaS-specific additions */
+    .org-switcher { padding: 10px 20px; border-bottom: 1px solid #34495e; }
+    .org-name { font-size: 12px; font-weight: 700; color: #ecf0f1; display: block; }
+    .org-plan { font-size: 10px; color: #95a5a6; }
+    .org-switch-btn { background: none; border: 1px solid #34495e; color: #95a5a6; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; margin-top: 4px; }
+    .org-switch-btn:hover { border-color: #3498db; color: #3498db; }
+    .plan-badge { display: inline-block; padding: 1px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; margin-left: 6px; }
+    .plan-free { background: #f0f0f0; color: #666; }
+    .plan-pro { background: #e3f2fd; color: #1565c0; }
+    .plan-enterprise { background: #f3e5f5; color: #6a1b9a; }
+    /* Role badge in sidebar */
+    .role-tag { font-size: 10px; color: #7f8c8d; margin-left: 8px; text-transform: uppercase; }
+    /* Upgrade CTA in sidebar */
+    .sidebar-upgrade { padding: 12px 20px; background: linear-gradient(135deg, #2980b9, #3498db); margin: 8px 12px; border-radius: 8px; }
+    .sidebar-upgrade p { font-size: 11px; color: rgba(255,255,255,.85); margin-bottom: 6px; }
+    .sidebar-upgrade button { background: white; color: #3498db; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; width: 100%; }
+  </style>
+</head>
+<body>
+<div class="app-container">
+  <nav class="sidebar">
+    <div class="logo">
+      <h1>LedgerPro</h1>
+      <p class="tagline">Accounting Software</p>
+    </div>
+
+    <!-- Org switcher -->
+    <div class="org-switcher" id="org-switcher" style="display:none">
+      <span class="org-name" id="sidebar-org-name">—</span>
+      <span class="org-plan" id="sidebar-org-plan"></span>
+    </div>
+
+    <ul class="nav-menu">
+      <li><a href="#" class="nav-link active" data-module="home">Dashboard</a></li>
+      <li class="nav-section-label">Core Accounting</li>
+      <li><a href="#" class="nav-link" data-module="finance">Finance</a></li>
+      <li><a href="#" class="nav-link" data-module="ar">Accounts Receivable</a></li>
+      <li><a href="#" class="nav-link" data-module="ap">Accounts Payable</a></li>
+      <li><a href="#" class="nav-link" data-module="fixed-assets">Fixed Assets</a></li>
+      <li><a href="#" class="nav-link" data-module="tax">Tax</a></li>
+      <li class="nav-section-label">Operations</li>
+      <li><a href="#" class="nav-link" data-module="hr">HR</a></li>
+      <li><a href="#" class="nav-link" data-module="expenses">Expenses</a></li>
+      <li><a href="#" class="nav-link" data-module="projects">Projects</a></li>
+      <li class="nav-section-label">Insights</li>
+      <li><a href="#" class="nav-link" data-module="reports">Reports &amp; Analytics</a></li>
+      <li class="nav-section-label">Account</li>
+      <li><a href="#" class="nav-link" data-module="settings">⚙️ Settings &amp; Team</a></li>
+      <li class="nav-logout-item"><a href="#" id="logout-btn">Sign Out</a></li>
+    </ul>
+
+    <!-- Free plan upgrade nudge -->
+    <div class="sidebar-upgrade" id="sidebar-upgrade" style="display:none">
+      <p>You're on the Free plan</p>
+      <button onclick="window.router&&window.router.navigate('settings')">Upgrade to Pro ⭐</button>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div id="content-area"></div>
+  </main>
+</div>
+
+<!-- React -->
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<!-- API Client -->
+<script src="components/api.js"></script>
+
+<!-- Shared UI -->
+<script type="text/babel" src="components/ui.jsx"></script>
+
+<!-- Auth -->
+<script type="text/babel" src="components/Login.jsx"></script>
+
+<!-- Dashboard -->
+<script type="text/babel" src="components/Dashboard.jsx"></script>
+
+<!-- Core Modules -->
+<script type="text/babel" src="components/Finance.jsx"></script>
+<script type="text/babel" src="components/AccountsReceivable.jsx"></script>
+<script type="text/babel" src="components/AccountsPayable.jsx"></script>
+<script type="text/babel" src="components/FixedAssets.jsx"></script>
+<script type="text/babel" src="components/Tax.jsx"></script>
+
+<!-- Operations -->
+<script type="text/babel" src="components/HR.jsx"></script>
+<script type="text/babel" src="components/Expenses.jsx"></script>
+<script type="text/babel" src="components/Projects.jsx"></script>
+
+<!-- Reports & Settings -->
+<script type="text/babel" src="components/Reports.jsx"></script>
+<script type="text/babel" src="components/Settings.jsx"></script>
+
+<!-- Router -->
+<script>
+(function () {
+  const modules = {
+    home:           { componentName: 'Dashboard'        },
+    finance:        { componentName: 'FinanceModule'    },
+    ar:             { componentName: 'ARModule'         },
+    ap:             { componentName: 'APModule'         },
+    'fixed-assets': { componentName: 'FixedAssetsModule'},
+    tax:            { componentName: 'TaxModule'        },
+    hr:             { componentName: 'HRModule'         },
+    expenses:       { componentName: 'ExpensesModule'   },
+    projects:       { componentName: 'ProjectsModule'   },
+    reports:        { componentName: 'ReportsModule'    },
+    settings:       { componentName: 'SettingsModule'   }
+  };
+
+  function updateSidebar() {
+    const org  = window.API.currentOrg;
+    const user = window.API.currentUser;
+    if (org) {
+      document.getElementById('sidebar-org-name').textContent = org.name || 'My Organisation';
+      document.getElementById('sidebar-org-plan').textContent =
+        { free: '🆓 Free Plan', pro: '⭐ Pro Plan', enterprise: '🏢 Enterprise' }[org.plan] || '';
+      document.getElementById('org-switcher').style.display = '';
+    }
+    if (org && org.plan === 'free') {
+      document.getElementById('sidebar-upgrade').style.display = '';
+    } else {
+      document.getElementById('sidebar-upgrade').style.display = 'none';
+    }
+  }
+
+  class Router {
+    constructor() {
+      this._root = null;
+      this._authRoot = null;
+      this._currentModule = 'home';
+    }
+
+    showAuth() {
+      const area = document.getElementById('content-area');
+      if (!this._authRoot) this._authRoot = ReactDOM.createRoot(area);
+      this._authRoot.render(React.createElement(window.LoginModal, {
+        onSuccess: (user, org) => {
+          window.API.currentUser = user;
+          window.API.currentOrg  = org;
+          updateSidebar();
+          this._authRoot = null;
+          this.navigate('home');
+        }
+      }));
+    }
+
+    navigate(mod) {
+      if (!modules[mod]) return;
+      this._currentModule = mod;
+      const cfg  = modules[mod];
+      const comp = window[cfg.componentName];
+      if (!comp) { console.error('Component not found:', cfg.componentName); return; }
+
+      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      document.querySelector(`[data-module="${mod}"]`)?.classList.add('active');
+
+      const area = document.getElementById('content-area');
+      if (this._root) { try { this._root.unmount(); } catch {} }
+      this._root = ReactDOM.createRoot(area);
+      this._root.render(React.createElement(comp));
+    }
+
+    async init() {
+      document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const mod = link.dataset.module;
+          if (mod) this.navigate(mod);
+        });
+      });
+
+      document.getElementById('logout-btn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try { await window.API.auth.logout(); } catch {}
+        window.API.currentUser = null;
+        window.API.currentOrg  = null;
+        document.getElementById('org-switcher').style.display = 'none';
+        document.getElementById('sidebar-upgrade').style.display = 'none';
+        this.showAuth();
+      });
+
+      // Check auth
+      try {
+        const res = await window.API.auth.me();
+        window.API.currentUser = res.data.user;
+        window.API.currentOrg  = res.data.org;
+        updateSidebar();
+        this.navigate('home');
+      } catch {
+        this.showAuth();
+      }
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    window.router = new Router();
+    window.router.init();
+  });
+})();
+</script>
+</body>
+</html>
