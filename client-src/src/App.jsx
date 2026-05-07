@@ -12,6 +12,7 @@ import ExpensesModule from './components/Expenses';
 import ProjectsModule from './components/Projects';
 import ReportsModule from './components/Reports';
 import SettingsModule from './components/Settings';
+import AdminPortal from './components/Admin';
 
 const MODULES = {
   home: Dashboard,
@@ -25,6 +26,7 @@ const MODULES = {
   projects: ProjectsModule,
   reports: ReportsModule,
   settings: SettingsModule,
+  admin: AdminPortal,
 };
 
 const NAV = [
@@ -44,6 +46,8 @@ const NAV = [
   { section: 'Account' },
   { id: 'settings', label: '⚙️ Settings & Team' },
 ];
+
+const ADMIN_NAV = { id: 'admin', label: '⚡ Admin Portal', superAdminOnly: true };
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -101,6 +105,18 @@ export default function App() {
                     {item.label}
                   </a>
                 </li>
+          )}
+          {user?.isSuperAdmin && (
+            <>
+              <li className="nav-section-label" style={{ color:'#e74c3c' }}>Platform</li>
+              <li>
+                <a href="#" className={'nav-link' + (module === 'admin' ? ' active' : '')}
+                  style={{ color: module === 'admin' ? undefined : '#e74c3c' }}
+                  onClick={e => { e.preventDefault(); navigate('admin'); }}>
+                  ⚡ Admin Portal
+                </a>
+              </li>
+            </>
           )}
           <li className="nav-logout-item">
             <a href="#" onClick={e => { e.preventDefault(); handleLogout(); }}>Sign Out</a>

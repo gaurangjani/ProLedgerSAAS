@@ -186,6 +186,20 @@ const API = {
   audit: {
     list: (p) => request('GET', '/audit' + (p ? '?' + new URLSearchParams(p).toString() : ''))
   },
+
+  admin: {
+    getStats:         ()       => request('GET',  '/admin/stats'),
+    listOrgs:         (p)      => request('GET',  '/admin/orgs' + q(p)),
+    getOrg:           (id)     => request('GET',  `/admin/orgs/${id}`),
+    updateOrg:        (id, d)  => request('PUT',  `/admin/orgs/${id}`, d),
+    suspendOrg:       (id)     => request('POST', `/admin/orgs/${id}/suspend`),
+    listUsers:        (p)      => request('GET',  '/admin/users' + q(p)),
+    getUser:          (id)     => request('GET',  `/admin/users/${id}`),
+    forceVerifyEmail: (id)     => request('POST', `/admin/users/${id}/verify-email`),
+    toggleSuperAdmin: (id)     => request('POST', `/admin/users/${id}/super-admin`),
+    deactivateUser:   (id)     => request('POST', `/admin/users/${id}/deactivate`),
+    getPlatformAudit: (p)      => request('GET',  '/admin/audit' + q(p))
+  }
 };
 
 export default API;

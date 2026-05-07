@@ -15,6 +15,7 @@ const orgRoutes        = require('./routes/orgs');
 const accountingRoutes = require('./routes/accounting');
 const billingRoutes    = require('./routes/billing');
 const auditRoutes      = require('./routes/audit');
+const adminRoutes      = require('./routes/admin');
 
 const app = express();
 connectDB();
@@ -68,6 +69,7 @@ app.use(`${API}/auth`,    authLimiter, authRoutes);
 app.use(`${API}/orgs`,    apiLimiter,  orgRoutes);
 app.use(`${API}/billing`, apiLimiter,  billingRoutes);
 app.use(`${API}/audit`,   apiLimiter,  auditRoutes);
+app.use(`${API}/admin`,   apiLimiter,  adminRoutes);
 app.use(`${API}`,         apiLimiter,  accountingRoutes);
 
 app.use((req, res) => res.status(404).json({ success: false, message: 'Not found' }));
