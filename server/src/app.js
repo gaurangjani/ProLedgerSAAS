@@ -38,8 +38,11 @@ app.use('/api/v1/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET environment variable is required in production');
+}
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'ledgerpro-saas-secret',
+  secret: process.env.SESSION_SECRET || 'ledgerpro-saas-dev-only-secret',
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({

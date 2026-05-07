@@ -20,9 +20,10 @@ router.get('/finance/journal-entries',                                          
 router.post('/finance/journal-entries', canWrite, validate(s.createJournalEntry), audit('CREATE','JournalEntry'), c.createJournal);
 router.put('/finance/journal-entries/:id', canWrite,                                                               c.postJournal);
 
-router.get('/finance/reports/trial-balance',    c.getTrialBalance);
-router.get('/finance/reports/profit-loss',      c.getProfitLoss);
-router.get('/finance/reports/balance-sheet',    c.getBalanceSheet);
+router.get('/finance/reports/trial-balance',      c.getTrialBalance);
+router.get('/finance/reports/profit-loss',        c.getProfitLoss);
+router.get('/finance/reports/balance-sheet',      c.getBalanceSheet);
+router.get('/finance/reports/fixed-assets-schedule', c.getFixedAssetsSchedule);
 
 // ── AR ────────────────────────────────────────────────
 router.get('/ar/customers',          c.listCustomers);
@@ -74,6 +75,7 @@ router.get('/tax/returns',           c.listTaxReturns);
 router.post('/tax/returns', canWrite, c.createTaxReturn);
 router.put('/tax/returns/:id', canWrite, c.updateTaxReturn);
 router.post('/tax/returns/:id/file', canWrite, c.fileTaxReturn);
+router.get('/tax/transactions',      c.listTaxTransactions);
 
 // ── HR ────────────────────────────────────────────────
 router.get('/hr/departments',        c.listDepartments);

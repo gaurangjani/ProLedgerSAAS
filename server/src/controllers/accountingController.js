@@ -105,6 +105,42 @@ exports.getBalanceSheet = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+exports.getFixedAssetsSchedule = async (req, res, next) => {
+  try {
+    const assets = await FixedAsset.find({ org: req.orgId }).sort({ acquisitionDate: 1 }).lean();
+    const schedule = assets.map(a => ({
+      assetCode:  a.assetCode,
+      assetName:  a.assetName,
+      category:   a.category,
+      acquisitionDate: a.acquisitionDate,
+      acquisitionCost: a.acquisitionCost,
+      depreciationMethod: a.depreciationMethod,
+      usefulLifeYears: a.usefulLifeYears || a.usefulLife?.value,
+      accumulatedDepreciation: a.accumulatedDepreciation || 0,
+      netBookValue: a.netBookValue != null ? a.netBookValue : (a.acquisitionCost || 0),
+      residualValue: a.residualValue || 0,
+      status: a.status
+    }));
+    res.json({ success: true, data: schedule });
+  } catch (err) { next(err); }
+};
+
+exports.listTaxTransactions = async (req, res, next) => {
+  try {
+    const invoices = await Invoice.find({ org: req.orgId, status: { $ne: 'cancelled' } })
+      .select('invoiceNumber invoiceDate totalAmount taxAmount status customerName').lean();
+    const bills = await Bill.find({ org: req.orgId, status: { $ne: 'cancelled' } })
+      .select('billNumber billDate totalAmount status vendorName').lean();
+    res.json({
+      success: true,
+      data: {
+        salesTransactions: invoices.map(i => ({ ref: i.invoiceNumber, date: i.invoiceDate, amount: i.totalAmount, taxAmount: i.taxAmount || 0, party: i.customerName, type: 'sale' })),
+        purchaseTransactions: bills.map(b => ({ ref: b.billNumber, date: b.billDate, amount: b.totalAmount, party: b.vendorName, type: 'purchase' }))
+      }
+    });
+  } catch (err) { next(err); }
+};
+
 // ── AR ────────────────────────────────────────────────
 exports.listCustomers  = list(Customer);
 exports.createCustomer = create(Customer);

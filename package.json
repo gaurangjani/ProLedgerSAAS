@@ -4,9 +4,9 @@
   "description": "LedgerPro SaaS — multi-tenant accounting software",
   "scripts": {
     "dev:server": "cd server && npm run dev",
-    "dev:client": "vite",
-    "build:client": "vite build",
-    "preview:client": "vite preview",
+    "dev:client": "vite --config client-src/vite.config.js",
+    "build:client": "vite build --config client-src/vite.config.js",
+    "preview:client": "vite preview --config client-src/vite.config.js",
     "install:all": "npm install && cd server && npm install",
     "start": "cd server && npm start"
   },

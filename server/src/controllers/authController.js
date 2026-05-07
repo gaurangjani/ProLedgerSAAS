@@ -49,6 +49,7 @@ exports.login = (req, res, next) => {
   passport.authenticate('local', async (err, user, info) => {
     if (err) return next(err);
     if (!user) return res.status(401).json({ success: false, message: info?.message || 'Invalid credentials' });
+    if (!user.isEmailVerified) return res.status(403).json({ success: false, message: 'Please verify your email before logging in.', code: 'EMAIL_UNVERIFIED' });
     req.login(user, async (err2) => {
       if (err2) return next(err2);
       let org = null;
