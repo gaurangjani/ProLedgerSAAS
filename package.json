@@ -4,8 +4,18 @@
   "description": "LedgerPro SaaS — multi-tenant accounting software",
   "scripts": {
     "dev:server": "cd server && npm run dev",
-    "dev:client": "npx http-server client -p 8080 -c-1",
+    "dev:client": "vite",
+    "build:client": "vite build",
+    "preview:client": "vite preview",
     "install:all": "npm install && cd server && npm install",
     "start": "cd server && npm start"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.2.0"
   }
 }

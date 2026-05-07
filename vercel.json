@@ -1,12 +1,14 @@
 {
   "version": 2,
+  "buildCommand": "npm run build:client",
+  "outputDirectory": "client-dist",
   "builds": [
     { "src": "server/api/index.js", "use": "@vercel/node", "config": { "includeFiles": ["server/src/**"] } }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/server/api/index.js" },
-    { "src": "/(.*\\.(css|js|svg|png|ico|json|webmanifest))", "dest": "/client/$1" },
-    { "src": "/(.*)", "dest": "/client/index.html" }
+    { "src": "/(.*\\.(css|js|svg|png|ico|json|webmanifest|woff2|woff|ttf))", "dest": "/client-dist/$1" },
+    { "src": "/(.*)", "dest": "/client-dist/index.html" }
   ],
   "env": { "NODE_ENV": "production" }
 }
