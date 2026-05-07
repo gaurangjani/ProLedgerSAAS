@@ -36,12 +36,16 @@
     currentRole: null,
 
     auth: {
-      register:   (d) => request('POST', '/auth/register', d),
-      login:      (d) => request('POST', '/auth/login', d),
-      logout:     ()  => request('POST', '/auth/logout'),
-      me:         ()  => request('GET',  '/auth/me'),
-      switchOrg:  (orgId) => request('POST', '/auth/switch-org', { orgId }),
-      acceptInvite: (d) => request('POST', '/auth/accept-invite', d)
+      register:           (d)     => request('POST', '/auth/register', d),
+      login:              (d)     => request('POST', '/auth/login', d),
+      logout:             ()      => request('POST', '/auth/logout'),
+      me:                 ()      => request('GET',  '/auth/me'),
+      switchOrg:          (orgId) => request('POST', '/auth/switch-org', { orgId }),
+      acceptInvite:       (d)     => request('POST', '/auth/accept-invite', d),
+      forgotPassword:     (d)     => request('POST', '/auth/forgot-password', d),
+      resetPassword:      (d)     => request('POST', '/auth/reset-password', d),
+      verifyEmail:        (token) => request('GET',  `/auth/verify-email?token=${token}`),
+      resendVerification: ()      => request('POST', '/auth/resend-verification')
     },
 
     orgs: {
@@ -74,13 +78,15 @@
       createCustomer: (d) => request('POST', '/ar/customers', d),
       updateCustomer: (id,d) => request('PUT', `/ar/customers/${id}`, d),
       deleteCustomer: (id)   => request('DELETE', `/ar/customers/${id}`),
-      getInvoices:   (p) => request('GET', '/ar/invoices' + q(p)),
-      createInvoice:  (d) => request('POST', '/ar/invoices', d),
-      updateInvoice: (id,d) => request('PUT', `/ar/invoices/${id}`, d),
-      deleteInvoice: (id)   => request('DELETE', `/ar/invoices/${id}`),
-      getPayments:   (p) => request('GET', '/ar/payments' + q(p)),
-      createPayment:  (d) => request('POST', '/ar/payments', d),
-      getAgingReport: ()  => request('GET', '/ar/reports/aging')
+      getInvoices:    (p)     => request('GET', '/ar/invoices' + q(p)),
+      createInvoice:  (d)     => request('POST', '/ar/invoices', d),
+      updateInvoice:  (id,d)  => request('PUT', `/ar/invoices/${id}`, d),
+      deleteInvoice:  (id)    => request('DELETE', `/ar/invoices/${id}`),
+      downloadPdf:    (id)    => { window.open(BASE_URL + `/ar/invoices/${id}/pdf`, '_blank'); },
+      emailInvoice:   (id, d) => request('POST', `/ar/invoices/${id}/email`, d),
+      getPayments:    (p)     => request('GET', '/ar/payments' + q(p)),
+      createPayment:  (d)     => request('POST', '/ar/payments', d),
+      getAgingReport: ()      => request('GET', '/ar/reports/aging')
     },
 
     ap: {

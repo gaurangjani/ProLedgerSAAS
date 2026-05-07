@@ -129,6 +129,46 @@ exports.createInvoice  = async (req, res, next) => {
 exports.updateInvoice  = update(Invoice);
 exports.deleteInvoice  = remove(Invoice);
 
+exports.downloadInvoicePdf = async (req, res, next) => {
+  try {
+    const { generateInvoicePdf } = require('../utils/pdf');
+    const invoice = await Invoice.findOne({ _id: req.params.id, org: req.orgId })
+      .populate('customer', 'customerName email').lean();
+    if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found' });
+
+    const org = req.org.toObject ? req.org.toObject() : req.org;
+    const pdfBuffer = await generateInvoicePdf(invoice, org);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) { next(err); }
+};
+
+exports.emailInvoice = async (req, res, next) => {
+  try {
+    const { generateInvoicePdf } = require('../utils/pdf');
+    const { sendInvoiceEmail }   = require('../utils/email');
+    const invoice = await Invoice.findOne({ _id: req.params.id, org: req.orgId })
+      .populate('customer', 'customerName email').lean();
+    if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found' });
+
+    const toEmail = req.body.email || invoice.customer?.email;
+    if (!toEmail) return res.status(400).json({ success: false, message: 'No recipient email — provide email in body or set one on the customer' });
+
+    const org = req.org.toObject ? req.org.toObject() : req.org;
+    const pdfBuffer = await generateInvoicePdf(invoice, org);
+    await sendInvoiceEmail({
+      to: toEmail,
+      customerName: invoice.customerName || invoice.customer?.customerName || 'Customer',
+      invoiceNumber: invoice.invoiceNumber,
+      orgName: org.name,
+      pdfBuffer
+    });
+
+    res.json({ success: true, message: `Invoice emailed to ${toEmail}` });
+  } catch (err) { next(err); }
+};
+
 exports.listARPayments  = list(ARPayment);
 exports.createARPayment = create(ARPayment);
 

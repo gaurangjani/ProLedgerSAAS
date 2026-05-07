@@ -40,3 +40,28 @@ exports.sendPasswordResetEmail = ({ to, resetUrl }) =>
     <p><a href="${resetUrl}" style="background:#e74c3c;color:white;padding:10px 20px;border-radius:4px;text-decoration:none;display:inline-block;margin:16px 0">Reset Password</a></p>
     <p style="color:#888;font-size:12px">If you didn't request this, you can safely ignore this email.</p>
   `);
+
+exports.sendVerificationEmail = ({ to, verifyUrl }) =>
+  send(to, `Verify your ${APP_NAME} email address`, `
+    <h2>Verify your email</h2>
+    <p>Thanks for signing up! Please verify your email address to unlock all features.</p>
+    <p><a href="${verifyUrl}" style="background:#27ae60;color:white;padding:10px 20px;border-radius:4px;text-decoration:none;display:inline-block;margin:16px 0">Verify Email Address</a></p>
+    <p style="color:#888;font-size:12px">This link expires in 24 hours. If you didn't create an account, you can ignore this email.</p>
+  `);
+
+exports.sendInvoiceEmail = ({ to, customerName, invoiceNumber, orgName, pdfBuffer }) =>
+  getClient()
+    ? getClient().emails.send({
+        from: FROM(),
+        to,
+        subject: `Invoice ${invoiceNumber} from ${orgName}`,
+        html: `
+          <h2>Invoice ${invoiceNumber}</h2>
+          <p>Dear ${customerName},</p>
+          <p>Please find your invoice attached.</p>
+          <p>Thank you for your business.</p>
+          <p>— ${orgName}</p>
+        `,
+        attachments: [{ filename: `${invoiceNumber}.pdf`, content: pdfBuffer.toString('base64') }]
+      })
+    : console.log(`[EMAIL] Invoice ${invoiceNumber} → ${to} (attachment: ${pdfBuffer.length} bytes)`);

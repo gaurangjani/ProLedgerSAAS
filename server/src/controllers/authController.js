@@ -1,9 +1,17 @@
-const crypto       = require('crypto');
-const User         = require('../models/User');
-const Organization = require('../models/Organization');
-const Membership   = require('../models/Membership');
-const PasswordReset = require('../models/PasswordReset');
-const email        = require('../utils/email');
+const crypto            = require('crypto');
+const User              = require('../models/User');
+const Organization      = require('../models/Organization');
+const Membership        = require('../models/Membership');
+const PasswordReset     = require('../models/PasswordReset');
+const EmailVerification = require('../models/EmailVerification');
+const email             = require('../utils/email');
+
+async function createVerificationToken(userId) {
+  await EmailVerification.deleteMany({ user: userId });
+  const token = crypto.randomBytes(32).toString('hex');
+  await EmailVerification.create({ user: userId, token, expiresAt: new Date(Date.now() + 86400000) });
+  return token;
+}
 
 exports.register = async (req, res, next) => {
   try {
@@ -23,8 +31,11 @@ exports.register = async (req, res, next) => {
     user.activeOrg = org._id;
     await user.save();
 
-    // Fire-and-forget welcome email
-    email.sendWelcomeEmail({ to: user.email, name: user.name, orgName: org.name }).catch(() => {});
+    // Send verification email
+    const verifyToken = await createVerificationToken(user._id);
+    const verifyUrl = `${process.env.APP_URL || 'http://localhost:8080'}/verify-email?token=${verifyToken}`;
+    email.sendVerificationEmail({ to: user.email, verifyUrl }).catch(() => {});
+    if (process.env.NODE_ENV !== 'production') console.log(`[VERIFY] ${user.email}: ${verifyUrl}`);
 
     req.login(user, (err) => {
       if (err) return next(err);
@@ -152,5 +163,35 @@ exports.resetPassword = async (req, res, next) => {
     await PasswordReset.deleteMany({ user: user._id });
 
     res.json({ success: true, message: 'Password reset successfully. You can now log in.' });
+  } catch (err) { next(err); }
+};
+
+exports.verifyEmail = async (req, res, next) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ success: false, message: 'Token is required' });
+
+    const record = await EmailVerification.findOne({ token });
+    if (!record || record.expiresAt < new Date())
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification link' });
+
+    await User.findByIdAndUpdate(record.user, { isEmailVerified: true });
+    await EmailVerification.deleteMany({ user: record.user });
+
+    res.json({ success: true, message: 'Email verified successfully.' });
+  } catch (err) { next(err); }
+};
+
+exports.resendVerification = async (req, res, next) => {
+  try {
+    if (req.user.isEmailVerified)
+      return res.json({ success: true, message: 'Email is already verified.' });
+
+    const token = await createVerificationToken(req.user._id);
+    const verifyUrl = `${process.env.APP_URL || 'http://localhost:8080'}/verify-email?token=${token}`;
+    await email.sendVerificationEmail({ to: req.user.email, verifyUrl });
+    if (process.env.NODE_ENV !== 'production') console.log(`[VERIFY] ${req.user.email}: ${verifyUrl}`);
+
+    res.json({ success: true, message: 'Verification email sent.' });
   } catch (err) { next(err); }
 };

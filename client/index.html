@@ -66,6 +66,12 @@
   </nav>
 
   <main class="main-content">
+    <!-- Email verification banner -->
+    <div id="verify-email-banner" style="display:none;background:#fff3cd;border-bottom:1px solid #ffc107;padding:10px 20px;font-size:13px;display:flex;align-items:center;gap:12px">
+      <span>⚠️ Please verify your email address to unlock all features.</span>
+      <button onclick="window.API.auth.resendVerification().then(()=>alert('Verification email sent!')).catch(e=>alert(e.message))"
+        style="background:#ffc107;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">Resend Email</button>
+    </div>
     <div id="content-area"></div>
   </main>
 </div>
@@ -133,6 +139,11 @@
       document.getElementById('sidebar-upgrade').style.display = '';
     } else {
       document.getElementById('sidebar-upgrade').style.display = 'none';
+    }
+    // Email verification banner
+    const banner = document.getElementById('verify-email-banner');
+    if (banner) {
+      banner.style.display = (user && !user.isEmailVerified) ? '' : 'none';
     }
   }
 

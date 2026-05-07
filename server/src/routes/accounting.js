@@ -27,9 +27,11 @@ router.put('/ar/customers/:id', canWrite, c.updateCustomer);
 router.delete('/ar/customers/:id', canWrite, c.deleteCustomer);
 
 router.get('/ar/invoices',                                          c.listInvoices);
-router.post('/ar/invoices', canWrite, validate(s.createInvoice), c.createInvoice);
-router.put('/ar/invoices/:id', canWrite, c.updateInvoice);
-router.delete('/ar/invoices/:id', canWrite, c.deleteInvoice);
+router.post('/ar/invoices',              canWrite, validate(s.createInvoice), c.createInvoice);
+router.put('/ar/invoices/:id',           canWrite,                            c.updateInvoice);
+router.delete('/ar/invoices/:id',        canWrite,                            c.deleteInvoice);
+router.get('/ar/invoices/:id/pdf',                                            c.downloadInvoicePdf);
+router.post('/ar/invoices/:id/email',    canWrite,                            c.emailInvoice);
 
 router.get('/ar/payments',            c.listARPayments);
 router.post('/ar/payments', canWrite,  c.createARPayment);

@@ -12,8 +12,9 @@ const userSchema = new mongoose.Schema({
   // Super-admin flag (platform-level, not org-level)
   isSuperAdmin: { type: Boolean, default: false },
 
-  isActive:     { type: Boolean, default: true },
-  lastLoginAt:  { type: Date }
+  isEmailVerified: { type: Boolean, default: false },
+  isActive:        { type: Boolean, default: true },
+  lastLoginAt:     { type: Date }
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {
