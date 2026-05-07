@@ -1,18 +1,20 @@
-const router = require('express').Router();
-const c = require('../controllers/accountingController');
+const router   = require('express').Router();
+const c        = require('../controllers/accountingController');
+const validate = require('../middleware/validate');
+const s        = require('../validation/schemas');
 const { isAuthenticated, requireOrg, canWrite } = require('../middleware/auth');
 
 router.use(isAuthenticated, requireOrg);
 
 // ── Finance ───────────────────────────────────────────
-router.get('/finance/accounts',               c.listAccounts);
-router.post('/finance/accounts',   canWrite,  c.createAccount);
-router.put('/finance/accounts/:id', canWrite, c.updateAccount);
-router.delete('/finance/accounts/:id', canWrite, c.deleteAccount);
+router.get('/finance/accounts',                                        c.listAccounts);
+router.post('/finance/accounts',   canWrite, validate(s.createAccount), c.createAccount);
+router.put('/finance/accounts/:id', canWrite,                          c.updateAccount);
+router.delete('/finance/accounts/:id', canWrite,                       c.deleteAccount);
 
-router.get('/finance/journal-entries',          c.listJournals);
-router.post('/finance/journal-entries', canWrite, c.createJournal);
-router.put('/finance/journal-entries/:id', canWrite, c.postJournal);
+router.get('/finance/journal-entries',                                            c.listJournals);
+router.post('/finance/journal-entries', canWrite, validate(s.createJournalEntry), c.createJournal);
+router.put('/finance/journal-entries/:id', canWrite,                              c.postJournal);
 
 router.get('/finance/reports/trial-balance',    c.getTrialBalance);
 router.get('/finance/reports/profit-loss',      c.getProfitLoss);
@@ -24,8 +26,8 @@ router.post('/ar/customers', canWrite, c.createCustomer);
 router.put('/ar/customers/:id', canWrite, c.updateCustomer);
 router.delete('/ar/customers/:id', canWrite, c.deleteCustomer);
 
-router.get('/ar/invoices',           c.listInvoices);
-router.post('/ar/invoices', canWrite,  c.createInvoice);
+router.get('/ar/invoices',                                          c.listInvoices);
+router.post('/ar/invoices', canWrite, validate(s.createInvoice), c.createInvoice);
 router.put('/ar/invoices/:id', canWrite, c.updateInvoice);
 router.delete('/ar/invoices/:id', canWrite, c.deleteInvoice);
 

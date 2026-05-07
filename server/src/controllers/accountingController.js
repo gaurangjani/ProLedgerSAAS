@@ -9,10 +9,25 @@ const {
 // ── Generic helpers ───────────────────────────────────
 const list  = (Model, populate = '') => async (req, res, next) => {
   try {
-    const query = Model.find({ org: req.orgId });
-    if (populate) query.populate(populate);
-    const data = await query.sort({ createdAt: -1 }).lean();
-    res.json({ success: true, data });
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip  = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      Model.find({ org: req.orgId })
+        .populate(populate || '')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Model.countDocuments({ org: req.orgId })
+    ]);
+
+    res.json({
+      success: true,
+      data,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    });
   } catch (err) { next(err); }
 };
 

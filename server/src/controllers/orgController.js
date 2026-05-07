@@ -3,6 +3,7 @@ const Membership   = require('../models/Membership');
 const Invite       = require('../models/Invite');
 const User         = require('../models/User');
 const crypto       = require('crypto');
+const email        = require('../utils/email');
 
 // GET /orgs/current
 exports.getCurrent = async (req, res) => {
@@ -67,8 +68,16 @@ exports.createInvite = async (req, res, next) => {
       token, invitedBy: req.user._id,
       expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000)
     });
-    // In production, send email here with invite link
     const inviteUrl = `${process.env.APP_URL || 'http://localhost:8080'}/accept-invite?token=${token}`;
+
+    // Fire-and-forget invite email
+    email.sendInviteEmail({
+      to: invite.email,
+      inviteUrl,
+      orgName: req.org.name,
+      invitedByName: req.user.name
+    }).catch(() => {});
+
     res.status(201).json({ success: true, data: { invite, inviteUrl } });
   } catch (err) { next(err); }
 };

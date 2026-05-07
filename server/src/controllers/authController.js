@@ -1,33 +1,30 @@
+const crypto       = require('crypto');
 const User         = require('../models/User');
 const Organization = require('../models/Organization');
 const Membership   = require('../models/Membership');
+const PasswordReset = require('../models/PasswordReset');
+const email        = require('../utils/email');
 
 exports.register = async (req, res, next) => {
   try {
-    const { name, email, password, orgName } = req.body;
-    if (!name || !email || !password || !orgName)
-      return res.status(400).json({ success: false, message: 'name, email, password and orgName are required' });
+    const { name, email: emailAddr, password, orgName } = req.body;
 
-    if (await User.findOne({ email: email.toLowerCase() }))
+    if (await User.findOne({ email: emailAddr.toLowerCase() }))
       return res.status(409).json({ success: false, message: 'Email already registered' });
 
-    // Create user
-    const user = await User.create({ name, email, password });
+    const user = await User.create({ name, email: emailAddr, password });
 
-    // Create organisation
     let slug = Organization.generateSlug(orgName);
-    // Ensure slug uniqueness
-    const existing = await Organization.findOne({ slug });
-    if (existing) slug = slug + '-' + Date.now();
+    if (await Organization.findOne({ slug })) slug = slug + '-' + Date.now();
 
     const org = await Organization.create({ name: orgName, slug, owner: user._id });
-
-    // Create owner membership
     await Membership.create({ user: user._id, organization: org._id, role: 'owner', acceptedAt: new Date() });
 
-    // Set active org
     user.activeOrg = org._id;
     await user.save();
+
+    // Fire-and-forget welcome email
+    email.sendWelcomeEmail({ to: user.email, name: user.name, orgName: org.name }).catch(() => {});
 
     req.login(user, (err) => {
       if (err) return next(err);
@@ -43,7 +40,6 @@ exports.login = (req, res, next) => {
     if (!user) return res.status(401).json({ success: false, message: info?.message || 'Invalid credentials' });
     req.login(user, async (err2) => {
       if (err2) return next(err2);
-      // Load active org info
       let org = null;
       if (user.activeOrg) org = await Organization.findById(user.activeOrg).lean();
       res.json({ success: true, data: { user: user.toSafeObject(), org } });
@@ -82,7 +78,7 @@ exports.acceptInvite = async (req, res, next) => {
     if (!token) return res.status(400).json({ success: false, message: 'Token is required' });
 
     const Invite = require('../models/Invite');
-    const invite = await Invite.findOne({ token });
+    const invite = await Invite.findOne({ token }).populate('organization');
     if (!invite) return res.status(404).json({ success: false, message: 'Invalid or expired invite' });
     if (invite.isExpired()) return res.status(400).json({ success: false, message: 'Invite has expired' });
     if (invite.acceptedAt) return res.status(400).json({ success: false, message: 'Invite has already been used' });
@@ -94,64 +90,66 @@ exports.acceptInvite = async (req, res, next) => {
       user = await User.create({ name, email: invite.email, password });
     }
 
-    const existing = await Membership.findOne({ user: user._id, organization: invite.organization });
+    const existing = await Membership.findOne({ user: user._id, organization: invite.organization._id });
     if (!existing) {
-      await Membership.create({ user: user._id, organization: invite.organization, role: invite.role, acceptedAt: new Date() });
+      await Membership.create({ user: user._id, organization: invite.organization._id, role: invite.role, acceptedAt: new Date() });
     }
 
     invite.acceptedAt = new Date();
     await invite.save();
-
-    user.activeOrg = invite.organization;
+    user.activeOrg = invite.organization._id;
     await user.save();
 
     req.login(user, (err) => {
       if (err) return next(err);
-      res.json({ success: true, message: 'Invite accepted. You are now logged in.' });
+      res.json({ success: true, data: { user: user.toSafeObject(), org: invite.organization } });
     });
   } catch (err) { next(err); }
 };
 
-const crypto = require('crypto');
-
-// In-memory store for reset tokens (use Redis/DB in production)
-const resetTokens = new Map();
-
 exports.forgotPassword = async (req, res, next) => {
   try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+    const { email: emailAddr } = req.body;
+    const user = await User.findOne({ email: emailAddr.toLowerCase() });
 
-    const user = await User.findOne({ email: email.toLowerCase() });
     // Always return 200 to prevent email enumeration
     if (!user) return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
 
+    // Delete any existing tokens for this user
+    await PasswordReset.deleteMany({ user: user._id });
+
     const token = crypto.randomBytes(32).toString('hex');
-    resetTokens.set(token, { userId: user._id.toString(), expiresAt: Date.now() + 3600000 });
+    await PasswordReset.create({
+      user: user._id,
+      token,
+      expiresAt: new Date(Date.now() + 3600000) // 1 hour
+    });
 
     const resetUrl = `${process.env.APP_URL || 'http://localhost:8080'}/reset-password?token=${token}`;
-    // In production: send email here
-    console.log(`Password reset link for ${email}: ${resetUrl}`);
+    await email.sendPasswordResetEmail({ to: user.email, resetUrl });
 
-    res.json({ success: true, message: 'If that email exists, a reset link has been sent.', _devResetUrl: process.env.NODE_ENV !== 'production' ? resetUrl : undefined });
+    res.json({
+      success: true,
+      message: 'If that email exists, a reset link has been sent.',
+      _devResetUrl: process.env.NODE_ENV !== 'production' ? resetUrl : undefined
+    });
   } catch (err) { next(err); }
 };
 
 exports.resetPassword = async (req, res, next) => {
   try {
     const { token, password } = req.body;
-    if (!token || !password) return res.status(400).json({ success: false, message: 'Token and password are required' });
-    if (password.length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
 
-    const record = resetTokens.get(token);
-    if (!record || Date.now() > record.expiresAt) return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
+    const record = await PasswordReset.findOne({ token });
+    if (!record || record.expiresAt < new Date())
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
 
-    const user = await User.findById(record.userId);
+    const user = await User.findById(record.user);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     user.password = password;
     await user.save();
-    resetTokens.delete(token);
+    await PasswordReset.deleteMany({ user: user._id });
 
     res.json({ success: true, message: 'Password reset successfully. You can now log in.' });
   } catch (err) { next(err); }
